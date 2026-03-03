@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="en" class="h-full">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Word Dominoes</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="/_sdk/element_sdk.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+  <style>
+    * { font-family: 'Fredoka', sans-serif; }
+    
+    .domino {
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      cursor: grab;
+      display: inline-flex;
+      flex-shrink: 0;
+      border-radius: 0;
+    }
+    
+    .domino:hover {
+      transform: scale(1.08) rotate(-3deg);
+    }
+    
+    .domino.selected {
+      transform: scale(1.15) rotate(0deg);
+      box-shadow: 0 0 0 4px #fbbf24, 0 20px 40px rgba(0,0,0,0.3);
+    }
+    
+    .domino.played {
+      cursor: default;
+    }
+    
+    .domino.played:hover {
+      transform: scale(1.02);
+    }
+    
+    #game-board {
+      overflow-x: auto;
+      overflow-y: hidden;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 1rem;
+      justify-content: center;
+      min-height: 180px;
+    }
+    
+    .drop-zone {
+      transition: all 0.3s ease;
+    }
+    
+    .drop-zone.highlight {
+      background: rgba(251, 191, 36, 0.3);
+      border-color: #fbbf24;
+      transform: scale(1.05);
+    }
+    
+    .drop-zone.invalid {
+      background: rgba(239, 68, 68, 0.2);
+      border-color: #ef4444;
+    }
+    
+    @keyframes bounce-in {
+      0% { transform: scale(0) rotate(-180deg); opacity: 0; }
+      50% { transform: scale(1.2) rotate(10deg); }
+      100% { transform: scale(1) rotate(0deg); opacity: 1; }
+    }
+    
+    @keyframes celebrate {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+    }
+    
+    .animate-bounce-in {
+      animation: bounce-in 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards;
+    }
+    
+    .celebrate {
+      animation: celebrate 0.5s ease-in-out;
+    }
+    
+    .word-red { color: #ef4444; font-weight: bold; }
+    .word-blue { color: #3b82f6; font-weight: bold; }
+    .word-green { color: #22c55e; font-weight: bold; }
+    .word-yellow { color: #eab308; font-weight: bold; }
+    .word-purple { color: #a855f7; font-weight: bold; }
+    .word-orange { color: #f97316; font-weight: bold; }
+    
+    .confetti {
+      position: fixed;
+      pointer-events: none;
+      z-index: 1000;
+    }
+  </style>
+  <style>body { box-sizing: border-box; }</style>
+  <script src="/_sdk/data_sdk.js" type="text/javascript"></script>
+ </head>
+ <body class="h-full overflow-auto">
+  <div id="app" class="min-h-full bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-800 p-4"><!-- Header -->
+   <header class="text-center mb-6">
+    <h1 id="game-title" class="text-4xl md:text-5xl font-bold text-white drop-shadow-lg mb-2">🎯 Word Dominoes 🎯</h1>
+    <p class="text-purple-200 text-lg">Match words with different colors!</p>
+   </header><!-- Score & Controls -->
+   <div class="flex flex-wrap justify-center gap-4 mb-6">
+    <div class="bg-white/20 backdrop-blur rounded-2xl px-6 py-3 text-white"><span class="text-purple-200">Score:</span> <span id="score" class="text-2xl font-bold ml-2">0</span>
+    </div>
+    <div class="bg-white/20 backdrop-blur rounded-2xl px-6 py-3 text-white"><span class="text-purple-200">Moves:</span> <span id="moves" class="text-2xl font-bold ml-2">0</span>
+    </div><button id="new-game-btn" class="bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-300 hover:to-orange-400 text-white font-bold px-6 py-3 rounded-2xl shadow-lg transition-all hover:scale-105"> 🎲 New Game </button>
+   </div><!-- Game Board -->
+   <div class="bg-white/10 backdrop-blur rounded-3xl p-4 md:p-6 mb-6 min-h-[200px]">
+    <h2 class="text-white text-xl font-semibold mb-4 text-center">🎮 Game Board</h2>
+    <div id="game-board"><!-- Played dominoes appear here -->
+     <div id="start-message" class="text-purple-200 text-center py-8 w-full">
+      <p class="text-xl md:text-2xl mb-2">👆 Select a domino from your hand to start!</p>
+      <p class="text-xs md:text-sm opacity-75">Match words • Different colors next to each other</p>
+     </div>
+    </div>
+   </div><!-- Player Hand -->
+   <div class="bg-white/10 backdrop-blur rounded-3xl p-4 md:p-6">
+    <h2 class="text-white text-xl font-semibold mb-4 text-center">🖐️ Your Dominoes</h2>
+    <div id="player-hand" class="flex flex-wrap justify-center gap-3 md:gap-4"><!-- Player's dominoes appear here -->
+    </div>
+    <div class="mt-4 text-center"><button id="reverse-btn" class="bg-gradient-to-r from-blue-400 to-cyan-500 hover:from-blue-300 hover:to-cyan-400 text-white font-bold px-6 py-2 rounded-2xl shadow-lg transition-all hover:scale-105 text-sm md:text-base"> 🔄 Reverse Last </button>
+    </div>
+   </div><!-- Instructions -->
+   <div class="mt-6 text-center">
+    <div class="inline-block bg-white/10 backdrop-blur rounded-2xl px-6 py-4 text-white max-w-lg">
+     <h3 class="font-bold text-lg mb-2">📚 How to Play</h3>
+     <ul class="text-sm text-purple-200 space-y-1 text-left">
+      <li>• Click a domino to select it</li>
+      <li>• Match the <strong class="text-white">same word</strong> to connect</li>
+      <li>• Tiger in red matches Tiger in blue, etc.</li>
+      <li>• Try to play all your dominoes!</li>
+     </ul>
+    </div>
+   </div><!-- Win Message -->
+   <div id="win-message" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 hidden">
+    <div class="bg-gradient-to-br from-yellow-400 to-orange-500 rounded-3xl p-8 text-center transform scale-0 transition-transform duration-500" id="win-content">
+     <h2 class="text-4xl font-bold text-white mb-4">🎉 You Won! 🎉</h2>
+     <p class="text-white text-xl mb-2">Amazing job!</p>
+     <p class="text-white/80 mb-6">Score: <span id="final-score" class="font-bold">0</span></p><button id="play-again-btn" class="bg-white text-orange-500 font-bold px-8 py-3 rounded-2xl hover:bg-orange-100 transition-all"> Play Again! 🎲 </button>
+    </div>
+   </div>
+  </div>
+  <script>
+    // Words that can appear in multiple colors
+    const allWords = ['Apple', 'Tiger', 'Sky', 'Flower', 'Fish', 'Tree', 'Sun', 'Cat', 'Ball', 'House'];
+    const wordColors = ['red', 'blue', 'green', 'yellow', 'purple', 'orange'];
+    
+    function getRandomWord() {
+      return allWords[Math.floor(Math.random() * allWords.length)];
+    }
+    
+    let gameState = {
+      playerHand: [],
+      boardDominoes: [],
+      selectedDomino: null,
+      score: 0,
+      moves: 0,
+      leftWord: null,
+      rightWord: null
+    };
+
+    // Default config
+    const defaultConfig = {
+      game_title: 'Word Dominoes',
+      background_color: '#312e81',
+      surface_color: '#ffffff1a',
+      text_color: '#ffffff',
+      primary_action: '#f59e0b',
+      secondary_action: '#a855f7'
+    };
+
+    // Initialize Element SDK
+    window.elementSdk.init({
+      defaultConfig,
+      onConfigChange: async (config) => {
+        const title = config.game_title || defaultConfig.game_title;
+        document.getElementById('game-title').textContent = `🎯 ${title} 🎯`;
+        
+        // Apply colors
+        const bgColor = config.background_color || defaultConfig.background_color;
+        const textColor = config.text_color || defaultConfig.text_color;
+        const primaryAction = config.primary_action || defaultConfig.primary_action;
+        
+        document.getElementById('app').style.background = `linear-gradient(135deg, ${bgColor} 0%, ${adjustColor(bgColor, -20)} 50%, ${adjustColor(bgColor, 20)} 100%)`;
+        document.getElementById('game-title').style.color = textColor;
+        document.getElementById('new-game-btn').style.background = `linear-gradient(to right, ${primaryAction}, ${adjustColor(primaryAction, -20)})`;
+      },
+      mapToCapabilities: (config) => ({
+        recolorables: [
+          {
+            get: () => config.background_color || defaultConfig.background_color,
+            set: (v) => { config.background_color = v; window.elementSdk.setConfig({ background_color: v }); }
+          },
+          {
+            get: () => config.text_color || defaultConfig.text_color,
+            set: (v) => { config.text_color = v; window.elementSdk.setConfig({ text_color: v }); }
+          },
+          {
+            get: () => config.primary_action || defaultConfig.primary_action,
+            set: (v) => { config.primary_action = v; window.elementSdk.setConfig({ primary_action: v }); }
+          }
+        ],
+        borderables: [],
+        fontEditable: undefined,
+        fontSizeable: undefined
+      }),
+      mapToEditPanelValues: (config) => new Map([
+        ['game_title', config.game_title || defaultConfig.game_title]
+      ])
+    });
+
+    function adjustColor(hex, percent) {
+      const num = parseInt(hex.replace('#', ''), 16);
+      const r = Math.min(255, Math.max(0, (num >> 16) + percent));
+      const g = Math.min(255, Math.max(0, ((num >> 8) & 0x00FF) + percent));
+      const b = Math.min(255, Math.max(0, (num & 0x0000FF) + percent));
+      return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
+    }
+
+    function getRandomColor() {
+      return wordColors[Math.floor(Math.random() * wordColors.length)];
+    }
+
+    function createDomino() {
+      // Ensure different colors on each side
+      const color1 = getRandomColor();
+      let color2 = getRandomColor();
+      while (color2 === color1) {
+        color2 = getRandomColor();
+      }
+      
+      // Different words each time
+      const word1 = getRandomWord();
+      let word2 = getRandomWord();
+      while (word2 === word1) {
+        word2 = getRandomWord();
+      }
+      
+      return {
+        id: Math.random().toString(36).substr(2, 9),
+        left: { word: word1, color: color1 },
+        right: { word: word2, color: color2 }
+      };
+    }
+
+    function createDominoElement(domino, isPlayable = true) {
+      const div = document.createElement('div');
+      div.className = `domino inline-flex rounded-2xl overflow-hidden shadow-xl bg-white ${isPlayable ? '' : 'played'}`;
+      div.dataset.id = domino.id;
+      
+      div.innerHTML = `
+        <div class="px-4 py-4 min-w-[80px] text-center flex items-center justify-center">
+          <span class="word-${domino.left.color} text-lg md:text-xl drop-shadow">${domino.left.word}</span>
+        </div>
+        <div class="bg-gray-300 w-1"></div>
+        <div class="px-4 py-4 min-w-[80px] text-center flex items-center justify-center">
+          <span class="word-${domino.right.color} text-lg md:text-xl drop-shadow">${domino.right.word}</span>
+        </div>
+      `;
+      
+      if (isPlayable) {
+        div.addEventListener('click', () => selectDomino(domino, div));
+      }
+      
+      return div;
+    }
+
+    function selectDomino(domino, element) {
+      // Deselect previous
+      document.querySelectorAll('.domino.selected').forEach(el => el.classList.remove('selected'));
+      
+      if (gameState.selectedDomino?.id === domino.id) {
+        gameState.selectedDomino = null;
+        return;
+      }
+      
+      gameState.selectedDomino = domino;
+      element.classList.add('selected');
+      
+      // If board is empty, place first domino
+      if (gameState.boardDominoes.length === 0) {
+        playDomino(domino, 'first');
+      } else {
+        // Check if can be played
+        tryPlayDomino(domino);
+      }
+    }
+
+    function tryPlayDomino(domino) {
+      const leftEndWord = gameState.boardDominoes[0].left.word;
+      const leftEndColor = gameState.boardDominoes[0].left.color;
+      const rightEndWord = gameState.boardDominoes[gameState.boardDominoes.length - 1].right.word;
+      const rightEndColor = gameState.boardDominoes[gameState.boardDominoes.length - 1].right.color;
+      
+      // Check left end - domino's right side matches left end's left side
+      // Words MUST match AND colors MUST be DIFFERENT
+      const canPlayLeft = domino.right.word === leftEndWord && domino.right.color !== leftEndColor;
+      const canPlayLeftFlipped = domino.left.word === leftEndWord && domino.left.color !== leftEndColor;
+      
+      // Check right end - domino's left side matches right end's right side
+      // Words MUST match AND colors MUST be DIFFERENT
+      const canPlayRight = domino.left.word === rightEndWord && domino.left.color !== rightEndColor;
+      const canPlayRightFlipped = domino.right.word === rightEndWord && domino.right.color !== rightEndColor;
+      
+      if (canPlayLeft) {
+        playDomino(domino, 'left', false);
+      } else if (canPlayLeftFlipped) {
+        playDomino(domino, 'left', true);
+      } else if (canPlayRight) {
+        playDomino(domino, 'right', false);
+      } else if (canPlayRightFlipped) {
+        playDomino(domino, 'right', true);
+      } else {
+        // Invalid play - shake animation
+        const element = document.querySelector(`[data-id="${domino.id}"]`);
+        element.classList.add('invalid');
+        element.style.animation = 'shake 0.5s ease-in-out';
+        setTimeout(() => {
+          element.classList.remove('invalid', 'selected');
+          element.style.animation = '';
+          gameState.selectedDomino = null;
+        }, 500);
+        
+        showMessage('❌ Words must match with different colors!');
+      }
+    }
+
+    function playDomino(domino, position, shouldFlip) {
+      const board = document.getElementById('game-board');
+      const startMessage = document.getElementById('start-message');
+      if (startMessage) startMessage.remove();
+      
+      // Flip if needed
+      let playedDomino = shouldFlip ? {
+        id: domino.id,
+        left: domino.right,
+        right: domino.left
+      } : { ...domino };
+      
+      // Store the played domino with flip info for undo
+      playedDomino._flipped = shouldFlip;
+      
+      if (position === 'first') {
+        gameState.leftWord = playedDomino.left.word;
+        gameState.rightWord = playedDomino.right.word;
+      } else if (position === 'left') {
+        gameState.leftWord = playedDomino.left.word;
+      } else if (position === 'right') {
+        gameState.rightWord = playedDomino.right.word;
+      }
+      
+      // Create played domino element
+      const element = createDominoElement(playedDomino, false);
+      element.classList.add('animate-bounce-in');
+      
+      if (position === 'left') {
+        board.insertBefore(element, board.firstChild);
+      } else {
+        board.appendChild(element);
+      }
+      
+      // Remove from hand
+      gameState.playerHand = gameState.playerHand.filter(d => d.id !== domino.id);
+      gameState.boardDominoes.push(playedDomino);
+      
+      // Update hand display
+      const handElement = document.querySelector(`#player-hand [data-id="${domino.id}"]`);
+      if (handElement) {
+        handElement.style.transform = 'scale(0)';
+        setTimeout(() => handElement.remove(), 300);
+      }
+      
+      // Update score
+      gameState.score += 10;
+      gameState.moves++;
+      updateStats();
+      
+      gameState.selectedDomino = null;
+      
+      // Check win
+      if (gameState.playerHand.length === 0) {
+        setTimeout(showWin, 500);
+      }
+    }
+
+    function showMessage(text) {
+      const existing = document.querySelector('.game-message');
+      if (existing) existing.remove();
+      
+      const msg = document.createElement('div');
+      msg.className = 'game-message fixed top-4 left-1/2 transform -translate-x-1/2 bg-white rounded-full px-6 py-3 shadow-xl text-lg font-bold z-50';
+      msg.textContent = text;
+      document.body.appendChild(msg);
+      
+      setTimeout(() => {
+        msg.style.opacity = '0';
+        msg.style.transform = 'translate(-50%, -20px)';
+        msg.style.transition = 'all 0.3s ease';
+        setTimeout(() => msg.remove(), 300);
+      }, 2000);
+    }
+
+    function updateStats() {
+      document.getElementById('score').textContent = gameState.score;
+      document.getElementById('moves').textContent = gameState.moves;
+    }
+
+    function showWin() {
+      document.getElementById('final-score').textContent = gameState.score;
+      const winMessage = document.getElementById('win-message');
+      const winContent = document.getElementById('win-content');
+      winMessage.classList.remove('hidden');
+      setTimeout(() => {
+        winContent.style.transform = 'scale(1)';
+      }, 100);
+      
+      // Confetti!
+      createConfetti();
+    }
+
+    function createConfetti() {
+      const colors = ['#ef4444', '#3b82f6', '#22c55e', '#eab308', '#a855f7', '#f97316'];
+      for (let i = 0; i < 50; i++) {
+        const confetti = document.createElement('div');
+        confetti.className = 'confetti';
+        confetti.style.left = Math.random() * 100 + 'vw';
+        confetti.style.top = '-10px';
+        confetti.style.width = '10px';
+        confetti.style.height = '10px';
+        confetti.style.background = colors[Math.floor(Math.random() * colors.length)];
+        confetti.style.borderRadius = Math.random() > 0.5 ? '50%' : '0';
+        confetti.style.animation = `fall ${2 + Math.random() * 2}s linear forwards`;
+        document.body.appendChild(confetti);
+        
+        setTimeout(() => confetti.remove(), 4000);
+      }
+      
+      // Add fall animation
+      if (!document.querySelector('#confetti-style')) {
+        const style = document.createElement('style');
+        style.id = 'confetti-style';
+        style.textContent = `
+          @keyframes fall {
+            to {
+              transform: translateY(100vh) rotate(720deg);
+              opacity: 0;
+            }
+          }
+          @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-10px) rotate(-5deg); }
+            75% { transform: translateX(10px) rotate(5deg); }
+          }
+        `;
+        document.head.appendChild(style);
+      }
+    }
+
+    function initGame() {
+      // Reset state
+      gameState = {
+        playerHand: [],
+        boardDominoes: [],
+        selectedDomino: null,
+        score: 0,
+        moves: 0,
+        leftWord: null,
+        rightWord: null
+      };
+      
+      // Hide win message
+      const winMessage = document.getElementById('win-message');
+      const winContent = document.getElementById('win-content');
+      winMessage.classList.add('hidden');
+      winContent.style.transform = 'scale(0)';
+      
+      // Clear board
+      const board = document.getElementById('game-board');
+      board.innerHTML = `
+        <div id="start-message" class="text-purple-200 text-center py-8">
+          <p class="text-2xl mb-2">👆 Select a domino from your hand to start!</p>
+          <p class="text-sm opacity-75">Match colors to connect words</p>
+        </div>
+      `;
+      
+      // Generate player hand (7 dominoes)
+      const hand = document.getElementById('player-hand');
+      hand.innerHTML = '';
+      
+      for (let i = 0; i < 7; i++) {
+        const domino = createDomino();
+        gameState.playerHand.push(domino);
+        const element = createDominoElement(domino);
+        element.style.animationDelay = `${i * 0.1}s`;
+        element.classList.add('animate-bounce-in');
+        hand.appendChild(element);
+      }
+      
+      updateStats();
+    }
+
+    // Event listeners
+    document.getElementById('new-game-btn').addEventListener('click', initGame);
+    document.getElementById('play-again-btn').addEventListener('click', initGame);
+    document.getElementById('reverse-btn').addEventListener('click', () => {
+      if (gameState.boardDominoes.length === 0) {
+        showMessage('❌ No dominoes to reverse!');
+        return;
+      }
+      
+      // Remove last played domino from board
+      const lastDomino = gameState.boardDominoes.pop();
+      const boardElement = document.querySelector(`#game-board [data-id="${lastDomino.id}"]`);
+      
+      if (boardElement) {
+        boardElement.style.transform = 'scale(0) rotate(180deg)';
+        setTimeout(() => boardElement.remove(), 300);
+      }
+      
+      // Add back to hand
+      gameState.playerHand.push(lastDomino);
+      const hand = document.getElementById('player-hand');
+      const element = createDominoElement(lastDomino);
+      element.style.animation = 'bounce-in 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards';
+      hand.appendChild(element);
+      
+      // Update board ends
+      if (gameState.boardDominoes.length === 0) {
+        gameState.leftWord = null;
+        gameState.rightWord = null;
+        const board = document.getElementById('game-board');
+        board.innerHTML = `
+          <div id="start-message" class="text-purple-200 text-center py-8 w-full">
+            <p class="text-xl md:text-2xl mb-2">👆 Select a domino from your hand to start!</p>
+            <p class="text-xs md:text-sm opacity-75">Match words • Different colors next to each other</p>
+          </div>
+        `;
+      }
+      
+      // Update score
+      gameState.score = Math.max(0, gameState.score - 10);
+      gameState.moves++;
+      updateStats();
+      
+      showMessage('↩️ Domino reversed!');
+    });
+
+    // Start game
+    initGame();
+  </script>
+ <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9d5f7942807f7f28',t:'MTc3MjQ0NDc4MC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
