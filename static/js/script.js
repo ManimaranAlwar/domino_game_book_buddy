@@ -68,21 +68,21 @@ async function fetchDraw() {
 // ── Rendering ───────────────────────────────────────
 function createDominoElement(domino, isPlayable = true) {
     const div = document.createElement('div');
-    div.className = `domino inline-flex rounded-2xl overflow-hidden shadow-xl bg-white ${isPlayable ? 'cursor-pointer' : 'played'}`;
+    const isVertical = domino._vertical || false;
+    div.className = `domino ${isVertical ? 'vertical' : ''} ${isPlayable ? '' : 'played'}`;
     div.dataset.id = domino.id;
 
+    const createHalf = (side) => `
+        <div class="tile-half">
+            <div class="word-dot" style="background:var(--color-${side.color})"></div>
+            <div class="tile-word" style="color:var(--color-${side.color})">${side.word}</div>
+        </div>
+    `;
+
     div.innerHTML = `
-    <div class="px-4 py-3 min-w-[85px] text-center flex flex-col items-center justify-center gap-1">
-      <span class="word-dot" style="background:var(--color-${domino.left.color})"></span>
-      <span class="word-${domino.left.color} text-base md:text-lg drop-shadow font-bold leading-tight">${domino.left.word}</span>
-      <span class="text-xs text-gray-400 uppercase tracking-widest">${domino.left.color}</span>
-    </div>
-    <div class="bg-gray-200 w-1 self-stretch"></div>
-    <div class="px-4 py-3 min-w-[85px] text-center flex flex-col items-center justify-center gap-1">
-      <span class="word-dot" style="background:var(--color-${domino.right.color})"></span>
-      <span class="word-${domino.right.color} text-base md:text-lg drop-shadow font-bold leading-tight">${domino.right.word}</span>
-      <span class="text-xs text-gray-400 uppercase tracking-widest">${domino.right.color}</span>
-    </div>`;
+        ${createHalf(domino.left)}
+        ${createHalf(domino.right)}
+    `;
 
     if (isPlayable) {
         div.addEventListener('click', () => selectDomino(domino, div));
@@ -113,12 +113,12 @@ function tryPlayDomino(domino) {
     const L = gameState.leftEnd;
     const R = gameState.rightEnd;
 
-    // Rule: touching words MATCH + touching colors DIFFER
+    // RULE UPDATE: Only words must match. Color is aesthetic.
     const fits = {
-        left: domino.right.word === L.word && domino.right.color !== L.color,
-        leftFlipped: domino.left.word === L.word && domino.left.color !== L.color,
-        right: domino.left.word === R.word && domino.left.color !== R.color,
-        rightFlipped: domino.right.word === R.word && domino.right.color !== R.color,
+        left: domino.right.word === L.word,
+        leftFlipped: domino.left.word === L.word,
+        right: domino.left.word === R.word,
+        rightFlipped: domino.right.word === R.word,
     };
 
     if (fits.left) playDomino(domino, 'left', false);
@@ -126,24 +126,78 @@ function tryPlayDomino(domino) {
     else if (fits.right) playDomino(domino, 'right', false);
     else if (fits.rightFlipped) playDomino(domino, 'right', true);
     else {
-        const el = document.querySelector(`[data-id="${domino.id}"]`);
+        const el = document.querySelector(`#player-hand [data-id="${domino.id}"]`);
         if (el) {
-            el.style.animation = 'shake 0.5s ease-in-out';
+            el.classList.add('shake');
             setTimeout(() => {
                 el.classList.remove('selected');
-                el.style.animation = '';
+                el.classList.remove('shake');
                 gameState.selectedDomino = null;
             }, 500);
         }
-        showMessage('❌ Words must match + different colors!');
+        showMessage('❌ Words must match!');
     }
 }
 
-function playDomino(domino, position, shouldFlip) {
+// ── Positioning & Layout ──────────────────────────
+function renderBoard() {
     const board = document.getElementById('game-board');
-    const startMsg = document.getElementById('start-message');
-    if (startMsg) startMsg.remove();
+    board.innerHTML = '';
 
+    if (gameState.boardDominoes.length === 0) {
+        board.innerHTML = `
+            <div id="start-message" class="text-purple-200 text-center py-8 w-full">
+                <p class="text-2xl mb-2">👆 Select a domino from your hand to start!</p>
+                <p class="text-sm opacity-75">Connect matching words into a chain</p>
+            </div>`;
+        return;
+    }
+
+    // Dynamic Snake Layout
+    let currentX = 80;
+    let currentY = 150; // Entry height
+    let direction = 1;  // 1 right, -1 left
+    const boardWidth = board.clientWidth - 200;
+    const rowHeight = 160;
+
+    gameState.boardDominoes.forEach((domino) => {
+        const isDouble = domino.left.word === domino.right.word;
+
+        // Prepare element
+        const dClone = { ...domino, _vertical: isDouble };
+        const el = createDominoElement(dClone, false);
+        el.style.position = 'absolute';
+
+        // Horizontal spacing: Double is 80px wide, Normal is 160px wide
+        const tileWidth = isDouble ? 80 : 160;
+        const tileHeight = isDouble ? 160 : 80;
+
+        // Center the tile vertically in the "row"
+        // Row center is currentY, so top = currentY - (tileHeight/2)
+        const topPos = currentY - (tileHeight / 2);
+
+        el.style.left = `${currentX}px`;
+        el.style.top = `${topPos}px`;
+        board.appendChild(el);
+
+        // Move to next X
+        const margin = 10;
+        currentX += (tileWidth + margin) * direction;
+
+        // Turn logic
+        if ((direction === 1 && currentX > boardWidth) || (direction === -1 && currentX < 80)) {
+            currentY += rowHeight;
+            direction *= -1;
+            // Align currentX for the new row
+            currentX += (tileWidth + margin) * direction;
+        }
+    });
+
+    // Expand board height to accommodate all rows
+    board.style.minHeight = `${currentY + 200}px`;
+}
+
+function playDomino(domino, position, shouldFlip) {
     const played = shouldFlip
         ? { id: domino.id, left: domino.right, right: domino.left, _flipped: true }
         : { ...domino, _flipped: false };
@@ -152,20 +206,17 @@ function playDomino(domino, position, shouldFlip) {
     if (position === 'first') {
         gameState.leftEnd = { ...played.left };
         gameState.rightEnd = { ...played.right };
+        gameState.boardDominoes = [played];
     } else if (position === 'left') {
         gameState.leftEnd = { ...played.left };
+        gameState.boardDominoes.unshift(played);
     } else {
         gameState.rightEnd = { ...played.right };
+        gameState.boardDominoes.push(played);
     }
-
-    // Render on board
-    const el = createDominoElement(played, false);
-    el.classList.add('animate-bounce-in');
-    position === 'left' ? board.insertBefore(el, board.firstChild) : board.appendChild(el);
 
     // Remove from hand
     gameState.playerHand = gameState.playerHand.filter(d => d.id !== domino.id);
-    gameState.boardDominoes.push(played);
 
     const handEl = document.querySelector(`#player-hand [data-id="${domino.id}"]`);
     if (handEl) {
@@ -173,16 +224,18 @@ function playDomino(domino, position, shouldFlip) {
         setTimeout(() => handEl.remove(), 300);
     }
 
+    renderBoard();
+
     gameState.score += 10;
     gameState.moves++;
     gameState.selectedDomino = null;
     updateStats();
 
     if (gameState.playerHand.length === 0) {
-        // Win only if boneyard exhausted OR hand genuinely empty
         setTimeout(showWin, 500);
     }
 }
+
 
 // ── Draw from Boneyard ──────────────────────────────
 async function drawFromBoneyard() {
@@ -276,17 +329,24 @@ document.getElementById('reverse-btn').addEventListener('click', () => {
         return;
     }
 
-    const last = gameState.boardDominoes.pop();
-    const boardEl = document.querySelector(`#game-board [data-id="${last.id}"]`);
-    if (boardEl) {
-        boardEl.style.transform = 'scale(0) rotate(180deg)';
-        setTimeout(() => boardEl.remove(), 300);
+    // Figure out which one was last played (it might be at start or end of boardDominoes depending on position)
+    // For simplicity, let's just pop from the array (last added)
+    const reversed = gameState.boardDominoes.pop();
+
+    // Recalculate ends
+    if (gameState.boardDominoes.length === 0) {
+        gameState.leftEnd = gameState.rightEnd = null;
+    } else {
+        const first = gameState.boardDominoes[0];
+        const last = gameState.boardDominoes[gameState.boardDominoes.length - 1];
+        gameState.leftEnd = { ...first.left };
+        gameState.rightEnd = { ...last.right };
     }
 
-    // Restore original orientation
-    const original = last._flipped
-        ? { id: last.id, left: last.right, right: last.left }
-        : { ...last };
+    // Restore original orientation for hand
+    const original = reversed._flipped
+        ? { id: reversed.id, left: reversed.right, right: reversed.left }
+        : { ...reversed };
     delete original._flipped;
 
     gameState.playerHand.push(original);
@@ -295,20 +355,7 @@ document.getElementById('reverse-btn').addEventListener('click', () => {
     el.classList.add('animate-bounce-in');
     hand.appendChild(el);
 
-    // Recalculate board ends
-    if (gameState.boardDominoes.length === 0) {
-        gameState.leftEnd = gameState.rightEnd = null;
-        document.getElementById('game-board').innerHTML = `
-            <div id="start-message" class="text-purple-200 text-center py-8 w-full">
-                <p class="text-2xl mb-2">👆 Select a domino from your hand to start!</p>
-                <p class="text-sm opacity-75">Match the same word • Touch different colors</p>
-            </div>`;
-    } else {
-        const first = gameState.boardDominoes[0];
-        const lst = gameState.boardDominoes[gameState.boardDominoes.length - 1];
-        gameState.leftEnd = { ...first.left };
-        gameState.rightEnd = { ...lst.right };
-    }
+    renderBoard();
 
     gameState.score = Math.max(0, gameState.score - 10);
     gameState.moves++;
@@ -333,14 +380,10 @@ async function initGame() {
     wm.classList.add('hidden');
     wc.style.transform = 'scale(0)';
 
-    // Clear board
-    document.getElementById('game-board').innerHTML = `
-        <div id="start-message" class="text-purple-200 text-center py-8 w-full">
-            <p class="text-2xl mb-2">👆 Select a domino from your hand to start!</p>
-            <p class="text-sm opacity-75">Match the same word • Touch different colors</p>
-        </div>`;
+    // Clear board and show initial message
+    renderBoard();
 
-    // Show loading
+    // Show loading in hand
     const hand = document.getElementById('player-hand');
     hand.innerHTML = '<p class="text-purple-300 text-center w-full py-4 animate-pulse">Shuffling 49 tiles…</p>';
 

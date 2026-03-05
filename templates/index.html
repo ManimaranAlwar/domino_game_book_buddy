@@ -111,7 +111,7 @@
             <h1 id="game-title" class="text-4xl md:text-5xl font-bold text-white drop-shadow-lg mb-1">
                 🎯 Word Dominoes 🎯
             </h1>
-            <p class="text-purple-200 text-base">7 words × 7 colors = 49 tiles · Form the longest chain!</p>
+            <p class="text-purple-200 text-base">Standard 28-tile Set · Classic Word Matching</p>
         </header>
 
         <!-- Stats Bar -->
@@ -130,7 +130,7 @@
             </div>
             <div class="bg-white/20 backdrop-blur rounded-2xl px-5 py-2 text-white text-center">
                 <div class="text-purple-200 text-xs uppercase tracking-wider">Boneyard</div>
-                <div id="boneyard" class="text-2xl font-bold">42</div>
+                <div id="boneyard" class="text-2xl font-bold">21</div>
             </div>
             <button id="new-game-btn" class="bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-300 hover:to-orange-400
                    text-white font-bold px-6 py-2 rounded-2xl shadow-lg transition-all hover:scale-105">
@@ -141,10 +141,10 @@
         <!-- Game Board -->
         <div class="bg-white/10 backdrop-blur rounded-3xl p-4 md:p-6 mb-6">
             <h2 class="text-white text-lg font-semibold mb-3 text-center">🎮 Game Board</h2>
-            <div id="game-board">
+            <div id="game-board" class="relative overflow-auto">
                 <div id="start-message" class="text-purple-200 text-center py-8 w-full">
                     <p class="text-2xl mb-2">👆 Select a domino from your hand to start!</p>
-                    <p class="text-sm opacity-75">Match the same word · Touch different colors</p>
+                    <p class="text-sm opacity-75">Connect matching words into a winding chain</p>
                 </div>
             </div>
         </div>
@@ -152,7 +152,7 @@
         <!-- Player Hand -->
         <div class="bg-white/10 backdrop-blur rounded-3xl p-4 md:p-6">
             <h2 class="text-white text-lg font-semibold mb-3 text-center">🖐️ Your Hand</h2>
-            <div id="player-hand" class="flex flex-wrap justify-center gap-3 min-h-[80px]">
+            <div id="player-hand" class="flex flex-wrap justify-center gap-3 min-h-[100px]">
                 <!-- tiles inserted here -->
             </div>
 
@@ -173,12 +173,12 @@
                 <div class="inline-block bg-white/10 backdrop-blur rounded-2xl px-6 py-4 text-white max-w-xl text-left">
                     <h3 class="font-bold text-base mb-2 text-center">📚 How to Play</h3>
                     <ul class="text-sm text-purple-200 space-y-1">
-                        <li>🃏 <strong class="text-white">49 tiles</strong> total (7 words × 7 colors) — shuffled each
+                        <li>🃏 <strong class="text-white">28 tiles</strong> total (Double-Six style) — shuffled each
                             game</li>
-                        <li>🖐️ You start with <strong class="text-white">7 tiles</strong> in your hand; 42 are in the
-                            boneyard</li>
+                        <li>🖐️ You start with <strong class="text-white">7 tiles</strong>; 21 are in the boneyard</li>
                         <li>🔤 Touching ends must have the <strong class="text-white">same word</strong></li>
-                        <li>🎨 Touching ends must have <strong class="text-yellow-300">different colors</strong></li>
+                        <li>📏 Doubles are placed <strong class="text-yellow-300">perpendicularly</strong> to the chain
+                        </li>
                         <li>🔄 Tiles auto-flip if they fit the other way round</li>
                         <li>🎲 Can't play? Draw one tile from the boneyard</li>
                         <li>🏆 Empty your hand to win!</li>
